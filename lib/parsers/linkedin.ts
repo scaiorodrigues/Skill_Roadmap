@@ -5,6 +5,7 @@ import { readTable } from "./csv";
 const MAX_FILE_BYTES = 5 * 1024 * 1024;
 const MAX_ITEMS = 200;
 const MAX_TEXT = 4000;
+export const MAX_RAW_TEXT = 20000;
 
 const MONTHS: Record<string, number> = {
   jan: 0, feb: 1, fev: 1, mar: 2, apr: 3, abr: 3, may: 4, mai: 4, jun: 5,
@@ -142,5 +143,7 @@ export function sanitizeLinkedInProfile(input: unknown): LinkedInProfile {
       return { name: str(o.name), authority: str(o.authority), startedOn: str(o.startedOn, 40), finishedOn: str(o.finishedOn, 40) };
     }),
     careerMonths: Number.isFinite(months) ? Math.min(Math.max(Math.round(months), 0), 1200) : 0,
+    source: p.source === "pdf" ? "pdf" : "zip",
+    rawText: str(p.rawText, MAX_RAW_TEXT),
   };
 }

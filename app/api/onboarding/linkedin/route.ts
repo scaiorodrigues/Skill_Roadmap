@@ -29,7 +29,7 @@ export async function POST(request: Request) {
   }
 
   const data = sanitizeLinkedInProfile((parsed as { profile?: unknown })?.profile);
-  if (!data.positions.length && !data.skills.length && !data.headline) {
+  if (!data.positions.length && !data.skills.length && !data.headline && data.rawText!.length < 200) {
     return NextResponse.json({ error: "Perfil vazio" }, { status: 422 });
   }
 

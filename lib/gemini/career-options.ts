@@ -72,6 +72,9 @@ const cut = (s: string, n: number) => (s.length > n ? `${s.slice(0, n)}…` : s)
 
 /** Resume o perfil em texto compacto para o prompt. */
 export function profileToPrompt(p: LinkedInProfile): string {
+  if (p.rawText) {
+    return `Texto do perfil do LinkedIn (extraído de um PDF; a ordem das seções pode estar misturada):\n${cut(p.rawText, 12000)}`;
+  }
   const lines = [
     `Nome: ${p.fullName}`,
     `Headline: ${p.headline}`,
