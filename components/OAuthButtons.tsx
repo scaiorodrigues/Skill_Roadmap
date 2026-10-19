@@ -10,6 +10,10 @@ const LABELS: Record<Provider, string> = {
   github: "Continuar com GitHub",
 };
 
+// O Google só aparece depois de habilitado no Supabase (NEXT_PUBLIC_ENABLE_GOOGLE=true).
+const PROVIDERS: Provider[] =
+  process.env.NEXT_PUBLIC_ENABLE_GOOGLE === "true" ? ["github", "google"] : ["github"];
+
 export function OAuthButtons() {
   const [loading, setLoading] = useState<Provider | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -17,12 +21,14 @@ export function OAuthButtons() {
   async function signIn(provider: Provider) {
     setLoading(provider);
     setError(null);
-    const supabase = createClient();
-    const { error } = await supabase.auth.signInWithOAuth({
-      provider,
-      options: { redirectTo: `${window.location.origin}/auth/callback` },
-    });
-    if (error) {
+    try {
+      const supabase = createClient();
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider,
+        options: { redirectTo: `${window.location.origin}/auth/callback` },
+      });
+      if (error) throw error;
+    } catch {
       setError("Não foi possível iniciar o login. Tente novamente.");
       setLoading(null);
     }
@@ -30,7 +36,7 @@ export function OAuthButtons() {
 
   return (
     <div className="space-y-3">
-      {(Object.keys(LABELS) as Provider[]).map((p) => (
+      {PROVIDERS.map((p) => (
         <button
           key={p}
           onClick={() => signIn(p)}
