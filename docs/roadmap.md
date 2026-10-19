@@ -5,7 +5,7 @@
 - [x] 3. Migrations Supabase com RLS (aplicar no projeto: ver `supabase/README.md`)
 - [x] 4. Configuração de auth (Google + GitHub) — ver `docs/auth-setup.md`
 - [x] 5. Página de login funcional
-- [ ] 6. Onboarding: upload do .zip LinkedIn + parser
+- [x] 6. Onboarding: consentimento LGPD + upload do .zip LinkedIn (parser no navegador, perfil cifrado no servidor)
 - [ ] 7. Integração Gemini Flash (análise de perfil)
 - [ ] 8. Tela de resultados 5+1 com filtros por tag
 - [ ] 9. Geração do roadmap completo
