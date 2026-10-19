@@ -9,3 +9,12 @@ export async function encryptSecret(plain: string): Promise<string> {
   if (error || typeof data !== "string") throw new Error("Falha ao criptografar");
   return data;
 }
+
+/** Descriptografa um valor guardado com encryptSecret (recebe o bytea em hex do PostgREST). */
+export async function decryptSecret(cipher: string): Promise<string> {
+  const key = process.env.DATA_ENCRYPTION_KEY;
+  if (!key) throw new Error("DATA_ENCRYPTION_KEY não configurada");
+  const { data, error } = await createAdminClient().rpc("decrypt_secret", { cipher, key });
+  if (error || typeof data !== "string") throw new Error("Falha ao descriptografar");
+  return data;
+}

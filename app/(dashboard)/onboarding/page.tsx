@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -25,8 +26,11 @@ export default async function OnboardingPage() {
         <section className="rounded-xl border border-green-200 bg-green-50 p-6">
           <h2 className="text-xl font-semibold">Perfil importado</h2>
           <p className="mt-2 text-sm text-slate-700">
-            Seu perfil do LinkedIn está salvo com segurança. Em breve: seus 5 caminhos de carreira mais rentáveis.
+            Seu perfil do LinkedIn está salvo com segurança.
           </p>
+          <Link href="/analysis" className="mt-4 inline-block rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white">
+            Ver meus caminhos de carreira
+          </Link>
         </section>
       ) : (
         <LinkedInUpload />
