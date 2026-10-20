@@ -162,18 +162,23 @@ async function generateWithFallback(
 ): Promise<Generated & { model: string }> {
   const deadline = Date.now() + TOTAL_BUDGET_MS;
   let lastError = new GeminiError("Nenhum modelo de IA respondeu", 503, "UNAVAILABLE");
+  /** O que aconteceu em cada modelo, para o diagnóstico mostrar mais que só a última falha. */
+  const tried: string[] = [];
   for (const model of modelCandidates()) {
     if (deadline - Date.now() < MIN_ATTEMPT_MS) break;
+    const started = Date.now();
     let out: Generated | Response;
     try {
       out = await attempt(key, model, deadline, generationConfig, rest);
     } catch {
-      lastError = new GeminiError("A IA não respondeu a tempo", 504, "TIMEOUT", `O modelo ${model} não começou a responder a tempo.`);
+      tried.push(`${model}: sem resposta em ${Math.round((Date.now() - started) / 1000)} s`);
+      lastError = new GeminiError("A IA não respondeu a tempo", 504, "TIMEOUT", tried.join("; "));
       continue;
     }
     if (!(out instanceof Response)) return { ...out, model };
     const { reason, detail } = await errorInfo(out);
-    lastError = new GeminiError(`Gemini respondeu ${out.status}`, out.status, reason, detail);
+    tried.push(`${model}: ${out.status} ${reason}`.trim());
+    lastError = new GeminiError(`Gemini respondeu ${out.status}`, out.status, reason, tried.length > 1 ? `${tried.join("; ")} — ${detail}` : detail);
     if (!TRY_NEXT_MODEL.has(out.status)) break; // chave, permissão ou pedido inválido: outro modelo não resolve
   }
   throw lastError;
