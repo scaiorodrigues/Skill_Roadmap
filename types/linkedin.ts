@@ -32,4 +32,8 @@ export interface LinkedInProfile {
   education: LinkedInEducation[];
   certifications: LinkedInCertification[];
   careerMonths: number;
+  /** De onde veio o perfil: export completo (.zip) ou PDF do perfil. */
+  source?: "zip" | "pdf";
+  /** Texto bruto do PDF do perfil (a IA estrutura na análise). */
+  rawText?: string;
 }

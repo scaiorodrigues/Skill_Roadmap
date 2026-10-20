@@ -1,14 +1,18 @@
 # Plano de implementação
 
+Direção atual: **local-first**. Sem login; histórico guardado no aparelho; o servidor é um intermediário sem memória para o Gemini.
+
 - [x] 1. Documentação fundacional
 - [x] 2. Scaffold Next.js + TypeScript + Tailwind
-- [x] 3. Migrations Supabase com RLS (aplicar no projeto: ver `supabase/README.md`)
-- [x] 4. Configuração de auth (Google + GitHub) — ver `docs/auth-setup.md`
-- [x] 5. Página de login funcional
-- [x] 6. Onboarding: consentimento LGPD + upload do .zip LinkedIn (parser no navegador, perfil cifrado no servidor)
-- [ ] 7. Integração Gemini Flash (análise de perfil)
-- [ ] 8. Tela de resultados 5+1 com filtros por tag
-- [ ] 9. Geração do roadmap completo
-- [ ] 10. Sugestões de perfil por momento
-- [ ] 11. Integrações de progresso (GitHub, depois Duolingo)
-- [ ] 12. Rate limiting com mensagem de retorno
+- [x] 3. Banco no Supabase (agora usado só para o contador diário de uso)
+- [x] 4. ~~Login Google/GitHub~~ removido: o app não tem conta
+- [x] 5. Primeira tela: **Nova pesquisa** e **Histórico**
+- [x] 6. Envio do perfil do LinkedIn (PDF do perfil ou .zip), lido no navegador
+- [x] 7. Análise com Gemini Flash (5 caminhos + o 6º, de interesse pessoal)
+- [x] 8. Resultado completo logo após a 1ª análise, com filtro por tags e ordenação
+- [x] 9. Histórico local, comparação entre pesquisas e backup (exportar/importar)
+- [x] 10. Limite diário de uso por visitante e teto global
+- [ ] 11. Roadmap completo do caminho escolhido
+- [ ] 12. Sugestões de perfil (LinkedIn/GitHub) por momento
+- [ ] 13. Acompanhamento do GitHub pelo nome de usuário público
+- [ ] 14. Licença e pagamento (3 análises grátis + pacotes)

@@ -1,5 +1,9 @@
 # Skill RoadMap — Visão do Produto
 
+> **Atualização:** o produto é local-first. Não há login nem conta; o histórico fica no aparelho do usuário.
+> As seções abaixo sobre login, Supabase como banco do usuário e rate limit mensal por conta refletem o plano original
+> e foram substituídas por essa direção (ver `docs/roadmap.md` e `docs/deploy.md`).
+
 **Organização:** FromTech · **Licença:** MIT · **Idioma padrão:** Português (Brasil)
 
 ## O que é

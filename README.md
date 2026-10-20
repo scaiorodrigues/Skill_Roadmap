@@ -8,6 +8,11 @@ perfil, escolha um e siga um roadmap completo com skills, cursos e certificaçõ
 - Tracking de progresso: [`docs/track-spec.md`](docs/track-spec.md)
 - Plano de implementação: [`docs/roadmap.md`](docs/roadmap.md)
 
+## Privacidade
+
+Sem login e sem conta. O histórico de pesquisas fica só no navegador do usuário. Para gerar a análise, o texto do perfil é enviado ao
+Google Gemini por um intermediário que não o armazena.
+
 ## Rodando localmente
 
 ```bash
