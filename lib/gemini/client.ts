@@ -58,7 +58,9 @@ const TRY_NEXT_MODEL = new Set([404, 429, 500, 503]);
  */
 const firstChunkTimeoutMs = () => Number(process.env.GEMINI_FIRST_CHUNK_TIMEOUT_MS) || 10_000;
 
-const ENDPOINT = (model: string) => `https://generativelanguage.googleapis.com/v1beta/models/${model}:streamGenerateContent?alt=sse`;
+/** Endereço da API (trocável só para testes locais com um servidor falso). */
+const API_BASE = () => process.env.GEMINI_API_BASE || "https://generativelanguage.googleapis.com";
+const ENDPOINT = (model: string) => `${API_BASE()}/v1beta/models/${model}:streamGenerateContent?alt=sse`;
 
 /** Pouco "raciocínio" = resposta mais rápida. A família 2.5 usa orçamento; a 3.x usa nível. */
 function thinkingFor(model: string): Record<string, unknown> {

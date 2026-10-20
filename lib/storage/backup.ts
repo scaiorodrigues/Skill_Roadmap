@@ -1,5 +1,5 @@
 import type { Backup, ComparisonRecord, Research } from "@/types/research";
-import type { CareerOption, ProfileSummary, RoadmapOptions, Stress } from "@/types/career";
+import type { CareerOption, Demand, LocationInfo, MoneyRange, PathStep, ProfileSummary, RemoteAvailability, RoadmapOptions, Stress } from "@/types/career";
 import { sanitizeLinkedInProfile } from "@/lib/parsers/linkedin";
 import { normalizeProfileSummary } from "@/lib/gemini/career-options";
 
@@ -18,7 +18,34 @@ export function sanitizeStoredOption(raw: unknown): CareerOption | null {
   if (!title) return null;
   const sal = obj(r.salaryBrl);
   const stress: Stress = r.stress === "baixo" || r.stress === "alto" ? r.stress : "médio";
+  const money = (v: unknown): MoneyRange => {
+    const m = obj(v);
+    return { min: num(m.min), max: num(m.max) };
+  };
+  const steps: PathStep[] = (Array.isArray(r.steps) ? r.steps : [])
+    .slice(0, 5)
+    .map((x) => ({ title: text(obj(x).title, 80), years: text(obj(x).years, 20), salaryBrl: money(obj(x).salaryBrl) }))
+    .filter((x) => x.title);
+  const top = obj(r.topRole);
+  const rem = obj(r.remote);
+  const availability: RemoteAvailability = rem.availability === "comum" || rem.availability === "raro" ? rem.availability : "possível";
+  const locations: LocationInfo[] = (Array.isArray(r.locations) ? r.locations : [])
+    .slice(0, 4)
+    .map((x) => {
+      const o = obj(x);
+      const demand: Demand = o.demand === "alta" || o.demand === "baixa" ? o.demand : "média";
+      return { place: text(o.place, 60), demand, salaryBrl: money(o.salaryBrl) };
+    })
+    .filter((x) => x.place);
+  // Pesquisas antigas não têm etapas, topo, home office nem lugares: os campos ficam ausentes.
+  const extra = {
+    ...(steps.length ? { steps } : {}),
+    ...(text(top.title, 80) ? { topRole: { title: text(top.title, 80), salaryBrl: money(top.salaryBrl) } } : {}),
+    ...(r.remote ? { remote: { availability, salaryBrl: money(rem.salaryBrl) } } : {}),
+    ...(locations.length ? { locations } : {}),
+  };
   return {
+    ...extra,
     id: text(r.id, 120) || title,
     title,
     summary: text(r.summary, 400),

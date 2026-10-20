@@ -15,3 +15,9 @@ export function withTechnical(body: { error?: unknown; technical?: { code?: unkn
   const detail = typeof body.technical?.detail === "string" ? body.technical.detail : "";
   return code ? `${msg} (código: ${code}${detail ? ` — ${detail}` : ""})` : msg;
 }
+
+/** Valor curto para gráficos: "R$ 12 mil", "R$ 8,5 mil". */
+export function formatBrlShort(n: number): string {
+  if (n < 1000) return formatBrl(n);
+  return `R$ ${(n / 1000).toLocaleString("pt-BR", { maximumFractionDigits: 1 })} mil`;
+}

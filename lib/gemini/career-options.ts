@@ -1,5 +1,5 @@
 import type { LinkedInProfile } from "@/types/linkedin";
-import type { CareerOption, ProfileSummary, Stress } from "@/types/career";
+import type { CareerOption, Demand, LocationInfo, MoneyRange, PathStep, ProfileSummary, RemoteAvailability, RemoteInfo, Stress } from "@/types/career";
 
 export const DISCLAIMER =
   "Faixas salariais e demais dados são estimativas geradas por IA a partir de conhecimento geral de mercado. Confirme em vagas e pesquisas salariais atuais antes de decidir.";
@@ -17,27 +17,60 @@ export const STANDARD_TAGS = [
 const S = (description: string) => ({ type: "STRING", description });
 const STR_LIST = (description: string) => ({ type: "ARRAY", description, items: { type: "STRING" } });
 
+const INT = (description: string) => ({ type: "INTEGER", description });
+
 const OPTION_SCHEMA = {
   type: "OBJECT",
   properties: {
-    title: S("Nome do cargo"),
-    summary: S("O que a pessoa faz no dia a dia, em até 2 frases"),
-    whyFit: S("Por que combina com o perfil atual, em até 2 frases"),
-    salaryBrlMin: { type: "INTEGER", description: "Salário mensal mínimo típico no Brasil, em reais" },
-    salaryBrlMax: { type: "INTEGER", description: "Salário mensal máximo típico no Brasil, em reais" },
-    salaryRemote: S("Faixa para trabalho remoto para empresas do Brasil, ou vazio se não se aplica"),
-    salaryAbroad: S("Faixa no exterior com moeda, ou vazio se não se aplica"),
-    geography: S("Onde as vagas se concentram (cidades, regiões, remoto)"),
+    title: S("Nome do caminho de carreira (área), ex.: Engenharia de Dados"),
+    summary: S("O que se faz nesse caminho, em 1 frase curta"),
+    whyFit: S("Por que combina com o perfil atual, em 1 frase curta"),
+    steps: {
+      type: "ARRAY",
+      description: "3 a 5 etapas, da próxima etapa para esta pessoa até o cargo mais bem pago do caminho",
+      items: {
+        type: "OBJECT",
+        properties: {
+          title: S("Cargo da etapa"),
+          years: S("Experiência típica, ex.: 2–4 anos"),
+          salaryBrlMin: INT("Salário mensal mínimo no Brasil (presencial/híbrido), em reais"),
+          salaryBrlMax: INT("Salário mensal máximo no Brasil (presencial/híbrido), em reais"),
+        },
+        required: ["title", "years", "salaryBrlMin", "salaryBrlMax"],
+      },
+    },
+    remote: {
+      type: "OBJECT",
+      description: "Home office para o cargo do topo",
+      properties: {
+        availability: { type: "STRING", enum: ["comum", "possível", "raro"] },
+        salaryBrlMin: INT("Salário mensal mínimo em home office para empresa no Brasil, em reais"),
+        salaryBrlMax: INT("Salário mensal máximo em home office para empresa no Brasil, em reais"),
+      },
+      required: ["availability", "salaryBrlMin", "salaryBrlMax"],
+    },
+    locations: {
+      type: "ARRAY",
+      description: "2 a 4 lugares onde as vagas presenciais/híbridas se concentram",
+      items: {
+        type: "OBJECT",
+        properties: {
+          place: S("Cidade, UF (ex.: São Paulo, SP)"),
+          demand: { type: "STRING", enum: ["alta", "média", "baixa"] },
+          salaryBrlMin: INT("Salário mensal mínimo do cargo do topo nesse lugar, em reais"),
+          salaryBrlMax: INT("Salário mensal máximo do cargo do topo nesse lugar, em reais"),
+        },
+        required: ["place", "demand", "salaryBrlMin", "salaryBrlMax"],
+      },
+    },
+    salaryAbroad: S("Faixa do cargo do topo no exterior com moeda, ou vazio"),
     stress: { type: "STRING", enum: ["baixo", "médio", "alto"] },
-    stressNote: S("Motivo do nível de stress, em 1 frase"),
-    benefits: STR_LIST("3 a 5 benefícios comuns"),
-    complaints: STR_LIST("3 a 5 reclamações frequentes no mercado"),
+    stressNote: S("Motivo do nível de stress, em até 8 palavras"),
+    benefits: STR_LIST("3 benefícios comuns, até 4 palavras cada"),
+    complaints: STR_LIST("3 reclamações frequentes, até 4 palavras cada"),
     tags: STR_LIST("2 a 5 tags em minúsculas, com hífen"),
   },
-  required: [
-    "title", "summary", "whyFit", "salaryBrlMin", "salaryBrlMax", "salaryRemote", "salaryAbroad",
-    "geography", "stress", "stressNote", "benefits", "complaints", "tags",
-  ],
+  required: ["title", "summary", "whyFit", "steps", "remote", "locations", "salaryAbroad", "stress", "stressNote", "benefits", "complaints", "tags"],
 };
 
 export const OPTIONS_SCHEMA = {
@@ -98,8 +131,11 @@ export function profileToPrompt(p: LinkedInProfile): string {
 export function buildOptionsPrompt(p: LinkedInProfile): string {
   return `Com base no perfil abaixo, liste os 5 caminhos de carreira mais bem remunerados e realistas para essa pessoa, partindo da experiência atual dela. Preencha também o resumo do perfil.
 Regras para os 5 caminhos:
-- Devem ser 5 cargos DIFERENTES entre si. Não repita o mesmo cargo com outro nome (por exemplo, em inglês e em português) nem com outro nível de senioridade.
-- O título é só o nome do cargo, em português quando houver um nome usual no Brasil. Modalidade (remoto, internacional) não faz parte do título: vai nos campos de salário remoto, salário no exterior e nas tags.\n\n<dados>\n${profileToPrompt(p)}\n</dados>`;
+- São 5 caminhos (áreas) DIFERENTES entre si. Não repita a mesma área com outro nome (por exemplo, em inglês e em português).
+- Cada caminho tem de 3 a 5 etapas, da próxima etapa realista para esta pessoa até o cargo mais bem pago e alcançável daquele caminho.
+- Salários das etapas e dos lugares: mensais, em reais, presencial/híbrido. O home office tem a sua própria faixa e o quão comum ele é.
+- Lugares no formato "Cidade, UF". Não inclua "remoto" nos lugares nem no título.
+- Seja breve: frases curtas, sem repetir informações.\n\n<dados>\n${profileToPrompt(p)}\n</dados>`;
 }
 
 export function buildCustomPrompt(p: LinkedInProfile, interest: string): string {
@@ -126,28 +162,77 @@ function normalizeStress(v: unknown): Stress {
   return "médio";
 }
 
+const range = (minV: unknown, maxV: unknown): MoneyRange => {
+  let min = int(minV);
+  let max = int(maxV);
+  if (min > max) [min, max] = [max, min];
+  return { min, max };
+};
+const obj = (v: unknown): Record<string, unknown> => (v && typeof v === "object" ? (v as Record<string, unknown>) : {});
+const placeKey = (s: string) => s.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/g, " ").trim();
+
+function normalizeRemote(v: unknown): RemoteAvailability {
+  const s = text(v, 12).toLowerCase();
+  return s === "comum" || s === "raro" ? s : "possível";
+}
+function normalizeDemand(v: unknown): Demand {
+  const s = text(v, 8).toLowerCase();
+  return s === "alta" || s === "baixa" ? s : "média";
+}
+
 export function normalizeOption(raw: unknown, index: number): CareerOption | null {
-  const r = (raw && typeof raw === "object" ? raw : {}) as Record<string, unknown>;
+  const r = obj(raw);
   const title = text(r.title, 100);
   if (!title) return null;
-  let min = int(r.salaryBrlMin);
-  let max = int(r.salaryBrlMax);
-  if (min > max) [min, max] = [max, min];
+
+  const steps: PathStep[] = (Array.isArray(r.steps) ? r.steps : [])
+    .map((x) => {
+      const o = obj(x);
+      return { title: text(o.title, 80), years: text(o.years, 20), salaryBrl: range(o.salaryBrlMin, o.salaryBrlMax) };
+    })
+    .filter((st) => st.title)
+    .slice(0, 5);
+  if (steps.length === 0) return null; // um caminho sem etapas não serve para o usuário
+
+  // O topo é a etapa mais bem paga (em empate, a mais adiantada no caminho).
+  const top = steps.reduce((best, st) => (st.salaryBrl.max >= best.salaryBrl.max ? st : best), steps[0]);
+
+  const rem = obj(r.remote);
+  const remote: RemoteInfo = { availability: normalizeRemote(rem.availability), salaryBrl: range(rem.salaryBrlMin, rem.salaryBrlMax) };
+
+  const seen = new Set<string>();
+  const locations: LocationInfo[] = (Array.isArray(r.locations) ? r.locations : [])
+    .map((x) => {
+      const o = obj(x);
+      return { place: text(o.place, 60), demand: normalizeDemand(o.demand), salaryBrl: range(o.salaryBrlMin, o.salaryBrlMax) };
+    })
+    .filter((l) => {
+      const k = placeKey(l.place);
+      if (!k || /remot|home office/.test(k) || seen.has(k)) return false;
+      seen.add(k);
+      return true;
+    })
+    .slice(0, 4);
+
   const tags = Array.from(new Set(list(r.tags, 8, 30).map(normalizeTag).filter(Boolean))).slice(0, 6);
   return {
     id: `${slug(title) || "caminho"}-${index}`,
     title,
-    summary: text(r.summary, 400),
-    whyFit: text(r.whyFit, 400),
-    salaryBrl: { min, max },
-    salaryRemote: text(r.salaryRemote, 120),
+    summary: text(r.summary, 300),
+    whyFit: text(r.whyFit, 300),
+    salaryBrl: top.salaryBrl,
+    salaryRemote: "",
     salaryAbroad: text(r.salaryAbroad, 120),
-    geography: text(r.geography, 200),
+    geography: locations.map((l) => l.place).join(", "),
     stress: normalizeStress(r.stress),
-    stressNote: text(r.stressNote, 200),
-    benefits: list(r.benefits, 6, 100),
-    complaints: list(r.complaints, 6, 100),
+    stressNote: text(r.stressNote, 120),
+    benefits: list(r.benefits, 4, 60),
+    complaints: list(r.complaints, 4, 60),
     tags,
+    steps,
+    topRole: { title: top.title, salaryBrl: top.salaryBrl },
+    remote,
+    locations,
   };
 }
 

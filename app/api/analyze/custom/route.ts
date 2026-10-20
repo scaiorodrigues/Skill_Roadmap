@@ -28,7 +28,7 @@ export async function POST(request: Request) {
   if (claim !== "ok") return NextResponse.json({ error: limitMessage(claim) }, { status: 429 });
 
   try {
-    const { data: raw } = await generateJson({ system: SYSTEM_PROMPT, prompt: buildCustomPrompt(profile, interest), schema: CUSTOM_SCHEMA, maxOutputTokens: 2000 });
+    const { data: raw } = await generateJson({ system: SYSTEM_PROMPT, prompt: buildCustomPrompt(profile, interest), schema: CUSTOM_SCHEMA, maxOutputTokens: 2500 });
     const custom = normalizeOption(raw, 99);
     if (!custom) throw new Error("Resposta inválida");
     return NextResponse.json({ custom });

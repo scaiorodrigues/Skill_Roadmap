@@ -37,7 +37,7 @@ export async function POST(request: Request) {
   if (claim !== "ok") return NextResponse.json({ error: limitMessage(claim) }, { status: 429 });
 
   try {
-    const { data: raw, model } = await generateJson({ system: SYSTEM_PROMPT, prompt: buildOptionsPrompt(profile), schema: OPTIONS_SCHEMA });
+    const { data: raw, model } = await generateJson({ system: SYSTEM_PROMPT, prompt: buildOptionsPrompt(profile), schema: OPTIONS_SCHEMA, maxOutputTokens: 7000 });
     const { summary, options } = normalizeOptions(raw);
     const result: RoadmapOptions = { options, custom: null, disclaimer: DISCLAIMER, model };
     return NextResponse.json({ summary, result } satisfies AnalyzeResponse);
