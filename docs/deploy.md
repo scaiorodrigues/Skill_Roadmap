@@ -1,29 +1,22 @@
 # Deploy (Netlify + Supabase)
 
-O Netlify detecta o Next.js automaticamente (`netlify.toml` só fixa Node 22).
+O app é local-first: **sem login e sem conta**. O histórico de cada pessoa fica no navegador dela (IndexedDB).
+O servidor só repassa o perfil ao Gemini e não guarda nada dele. O Supabase guarda apenas um contador diário de uso
+(hash do IP + contagem), para proteger o custo da IA.
 
-## 1. Conectar o repositório
-Netlify → *Add new site* → *Import from Git* → GitHub → `scaiorodrigues/Skill_Roadmap`, branch `main`.
+## Variáveis de ambiente (Netlify → Project configuration → Environment variables)
 
-## 2. Variáveis de ambiente
-Site configuration → Environment variables. Defina **antes do primeiro build**
-(`NEXT_PUBLIC_*` são embutidas no build):
-
-| Variável | Valor | Escopo |
+| Variável | Valor | Secreta? |
 | --- | --- | --- |
-| `NEXT_PUBLIC_SUPABASE_URL` | `https://wbhkrsabfkmhtrkuncqh.supabase.co` | build + runtime |
-| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | chave publishable/anon | build + runtime |
-| `NEXT_PUBLIC_APP_URL` | URL do site no Netlify (https) | build + runtime |
-| `SUPABASE_SERVICE_ROLE_KEY` | secret key do Supabase | **secret**, só runtime |
-| `GOOGLE_GEMINI_API_KEY` | chave do AI Studio | **secret**, só runtime |
-| `DATA_ENCRYPTION_KEY` | `openssl rand -base64 32` | **secret**, só runtime |
+| `NEXT_PUBLIC_SUPABASE_URL` | `https://wbhkrsabfkmhtrkuncqh.supabase.co` | Não |
+| `SUPABASE_SERVICE_ROLE_KEY` | secret key do Supabase (`sb_secret_...`) | **Sim** |
+| `GOOGLE_GEMINI_API_KEY` | chave do [AI Studio](https://aistudio.google.com/apikey), começa com `AIza` | **Sim** |
 
-Marque as três últimas como *Contains secret values*. Nunca use o prefixo `NEXT_PUBLIC_` em segredos.
+Opcionais: `GEMINI_MODEL`, `ANALYSIS_DAILY_LIMIT_PER_IP` (3), `CUSTOM_DAILY_LIMIT_PER_IP` (6), `ANALYSIS_DAILY_LIMIT_GLOBAL` (300).
 
-## 3. Supabase Auth
-Com a URL do Netlify definida:
-- *Authentication → URL Configuration*: Site URL = URL do Netlify; Redirect URLs += `https://<site>.netlify.app/auth/callback`.
-- Provedores Google/GitHub: callback continua `https://wbhkrsabfkmhtrkuncqh.supabase.co/auth/v1/callback`.
+## Banco
+Aplique as migrations de `supabase/migrations`. A `20261020000000_anon_usage.sql` cria o contador diário. **Sem ela o app recusa as
+análises** (por segurança, nunca libera a IA sem controle de custo).
 
-## 4. Re-deploy
-Após mudar variáveis `NEXT_PUBLIC_*`, faça *Trigger deploy → Clear cache and deploy*.
+## Proteção de custo
+Defina também um teto de gasto e alertas no Google Cloud para a chave do Gemini.

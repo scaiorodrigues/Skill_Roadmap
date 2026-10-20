@@ -1,67 +1,51 @@
-import { createHash } from "node:crypto";
 import { NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
-import { createAdminClient } from "@/lib/supabase/admin";
-import { decryptSecret } from "@/lib/secrets";
-import { claimAnalysis, releaseAnalysis } from "@/lib/rate-limit";
 import { GEMINI_MODEL, GeminiError, generateJson } from "@/lib/gemini/client";
 import { DISCLAIMER, OPTIONS_SCHEMA, SYSTEM_PROMPT, buildOptionsPrompt, normalizeOptions } from "@/lib/gemini/career-options";
 import { sanitizeLinkedInProfile } from "@/lib/parsers/linkedin";
-import { nextAnalysisMessage } from "@/lib/format";
-import type { RoadmapOptions } from "@/types/career";
+import { readJsonBody } from "@/lib/request";
+import { LIMITS, claimUsage, releaseUsage, visitorBucket } from "@/lib/usage";
+import { limitMessage } from "@/lib/format";
+import type { RoadmapOptions, ProfileSummary } from "@/types/career";
 
 export const maxDuration = 26;
 
-/** Gera os 5 caminhos de carreira. Consome a análise do ciclo (1 a cada 30 dias). */
-export async function POST() {
-  const supabase = createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return NextResponse.json({ error: "Não autenticado" }, { status: 401 });
+export interface AnalyzeResponse {
+  summary: ProfileSummary;
+  result: RoadmapOptions;
+}
 
-  const admin = createAdminClient();
-  const { data: profile } = await admin
-    .from("profiles")
-    .select("consented_at, linkedin_data")
-    .eq("id", user.id)
-    .single();
-  if (!profile?.consented_at) return NextResponse.json({ error: "Aceite os termos antes de continuar" }, { status: 403 });
-  if (!profile.linkedin_data) return NextResponse.json({ error: "Importe seu perfil do LinkedIn primeiro" }, { status: 409 });
+/**
+ * Intermediário sem memória: recebe o perfil, pede os 5 caminhos ao Gemini e devolve.
+ * Nada do perfil é gravado no servidor; o histórico fica no aparelho do usuário.
+ */
+export async function POST(request: Request) {
+  const parsed = await readJsonBody(request);
+  if ("error" in parsed) return parsed.error;
 
-  const claim = await claimAnalysis(user.id);
-  if (!claim.ok) {
-    return NextResponse.json(
-      { error: nextAnalysisMessage(claim.nextAvailable), nextAvailable: claim.nextAvailable },
-      { status: 429 },
-    );
+  const profile = sanitizeLinkedInProfile(parsed.body.profile);
+  const hasContent = profile.positions.length > 0 || profile.skills.length > 0 || Boolean(profile.headline) || (profile.rawText?.length ?? 0) >= 200;
+  if (!hasContent) return NextResponse.json({ error: "Perfil vazio" }, { status: 422 });
+
+  const bucket = visitorBucket(request, "analysis");
+  let claim;
+  try {
+    claim = await claimUsage(bucket, LIMITS.analysisPerIp());
+  } catch {
+    console.error("usage check failed");
+    return NextResponse.json({ error: "Serviço indisponível no momento. Tente novamente em instantes." }, { status: 503 });
   }
+  if (claim !== "ok") return NextResponse.json({ error: limitMessage(claim) }, { status: 429 });
 
   try {
-    const linkedin = sanitizeLinkedInProfile(JSON.parse(await decryptSecret(profile.linkedin_data as string)));
-    const raw = await generateJson({
-      system: SYSTEM_PROMPT,
-      prompt: buildOptionsPrompt(linkedin),
-      schema: OPTIONS_SCHEMA,
-    });
+    const raw = await generateJson({ system: SYSTEM_PROMPT, prompt: buildOptionsPrompt(profile), schema: OPTIONS_SCHEMA });
     const { summary, options } = normalizeOptions(raw);
-
-    const roadmapOptions: RoadmapOptions = { options, custom: null, disclaimer: DISCLAIMER, model: GEMINI_MODEL };
-    const { error } = await admin.from("analyses").insert({
-      user_id: user.id,
-      linkedin_hash: createHash("sha256").update(JSON.stringify(linkedin)).digest("hex"),
-      raw_profile: summary,
-      roadmap_options: roadmapOptions,
-    });
-    if (error) throw new Error("Falha ao salvar a análise");
-
-    return NextResponse.json({ ok: true });
+    const result: RoadmapOptions = { options, custom: null, disclaimer: DISCLAIMER, model: GEMINI_MODEL };
+    return NextResponse.json({ summary, result } satisfies AnalyzeResponse);
   } catch (e) {
-    await releaseAnalysis(user.id); // o usuário não perde a análise do mês
-    const status = e instanceof GeminiError ? e.status : 0;
-    console.error("analyze failed", { status, message: e instanceof Error ? e.message : "unknown" });
+    await releaseUsage(bucket); // falhou: o teste do dia não é consumido
+    console.error("analyze failed", { status: e instanceof GeminiError ? e.status : 0 });
     return NextResponse.json(
-      { error: "Não foi possível gerar sua análise agora. Você não perdeu a análise do mês; tente novamente em instantes." },
+      { error: "Não foi possível gerar sua análise agora. Esse teste não foi descontado; tente novamente em instantes." },
       { status: 502 },
     );
   }
