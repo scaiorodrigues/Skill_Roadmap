@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { GEMINI_MODEL, GeminiError, generateJson } from "@/lib/gemini/client";
+import { GeminiError, generateJson } from "@/lib/gemini/client";
 import { DISCLAIMER, OPTIONS_SCHEMA, SYSTEM_PROMPT, buildOptionsPrompt, normalizeOptions } from "@/lib/gemini/career-options";
 import { sanitizeLinkedInProfile } from "@/lib/parsers/linkedin";
 import { readJsonBody } from "@/lib/request";
@@ -37,9 +37,9 @@ export async function POST(request: Request) {
   if (claim !== "ok") return NextResponse.json({ error: limitMessage(claim) }, { status: 429 });
 
   try {
-    const raw = await generateJson({ system: SYSTEM_PROMPT, prompt: buildOptionsPrompt(profile), schema: OPTIONS_SCHEMA });
+    const { data: raw, model } = await generateJson({ system: SYSTEM_PROMPT, prompt: buildOptionsPrompt(profile), schema: OPTIONS_SCHEMA });
     const { summary, options } = normalizeOptions(raw);
-    const result: RoadmapOptions = { options, custom: null, disclaimer: DISCLAIMER, model: GEMINI_MODEL };
+    const result: RoadmapOptions = { options, custom: null, disclaimer: DISCLAIMER, model };
     return NextResponse.json({ summary, result } satisfies AnalyzeResponse);
   } catch (e) {
     await releaseUsage(bucket); // falhou: o teste do dia não é consumido
