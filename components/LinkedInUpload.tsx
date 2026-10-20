@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { parseLinkedInZip } from "@/lib/parsers/linkedin";
 import { extractPdfText, profileFromPdfText } from "@/lib/parsers/linkedin-pdf";
 import type { LinkedInProfile } from "@/types/linkedin";
@@ -12,10 +12,13 @@ interface Props {
   onConfirm: (profile: LinkedInProfile) => void;
   busy: boolean;
   error: string | null;
+  /** Alternativa "copiar e colar" com o assistente da própria pessoa. */
+  renderManual?: (profile: LinkedInProfile, close: () => void) => ReactNode;
 }
 
-export function LinkedInUpload({ onConfirm, busy, error: externalError }: Props) {
+export function LinkedInUpload({ onConfirm, busy, error: externalError, renderManual }: Props) {
   const [profile, setProfile] = useState<LinkedInProfile | null>(null);
+  const [manual, setManual] = useState(false);
   const [pages, setPages] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [reading, setReading] = useState(false);
@@ -23,6 +26,7 @@ export function LinkedInUpload({ onConfirm, busy, error: externalError }: Props)
   async function onFile(file: File | undefined) {
     setError(null);
     setProfile(null);
+    setManual(false);
     if (!file) return;
     setReading(true);
     try {
@@ -69,7 +73,12 @@ export function LinkedInUpload({ onConfirm, busy, error: externalError }: Props)
         className="mt-4 block w-full text-sm file:mr-3 file:rounded-lg file:border-0 file:bg-slate-900 file:px-4 file:py-2 file:text-white"
       />
       {reading && <p className="mt-3 text-sm text-slate-600">Lendo o arquivo…</p>}
-      {(error || externalError) && <p role="alert" className="mt-3 text-sm text-red-600 dark:text-red-400">{error ?? externalError}</p>}
+      {(error || externalError) && (
+        <p role="alert" className="mt-3 text-sm text-red-600 dark:text-red-400">
+          {error ?? externalError}
+          {!error && renderManual && profile && " Enquanto isso, você pode usar o botão “Usar meu Claude (copiar e colar)”."}
+        </p>
+      )}
       {profile && (
         <div className="mt-5 rounded-lg bg-slate-50 p-4 text-sm">
           {profile.source === "pdf" ? (
@@ -94,13 +103,24 @@ export function LinkedInUpload({ onConfirm, busy, error: externalError }: Props)
               </dl>
             </>
           )}
-          <button
-            onClick={() => onConfirm(profile)}
-            disabled={busy}
-            className="mt-4 rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
-          >
-            {busy ? "Analisando seu perfil… (até 30 segundos)" : "Analisar meu perfil"}
-          </button>
+          {manual && renderManual ? (
+            renderManual(profile, () => setManual(false))
+          ) : (
+            <div className="mt-4 flex flex-wrap gap-2">
+              <button
+                onClick={() => onConfirm(profile)}
+                disabled={busy}
+                className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
+              >
+                {busy ? "Analisando seu perfil… (até 30 segundos)" : "Analisar meu perfil"}
+              </button>
+              {renderManual && !busy && (
+                <button onClick={() => setManual(true)} className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium">
+                  Usar meu Claude (copiar e colar)
+                </button>
+              )}
+            </div>
+          )}
         </div>
       )}
     </section>
