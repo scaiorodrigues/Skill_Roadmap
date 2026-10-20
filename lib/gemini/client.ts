@@ -52,61 +52,127 @@ const TOTAL_BUDGET_MS = 24_000;
 const MIN_ATTEMPT_MS = 3_000;
 /** Sobrecarga, cota esgotada, modelo indisponível ou erro interno: vale tentar outro modelo. */
 const TRY_NEXT_MODEL = new Set([404, 429, 500, 503]);
+/**
+ * Um modelo que está trabalhando começa a mandar texto em poucos segundos. Se nada chegar nesse prazo,
+ * ele provavelmente está travado por sobrecarga: desistimos dele e tentamos o próximo.
+ */
+const firstChunkTimeoutMs = () => Number(process.env.GEMINI_FIRST_CHUNK_TIMEOUT_MS) || 10_000;
 
-const ENDPOINT = (model: string) => `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
+const ENDPOINT = (model: string) => `https://generativelanguage.googleapis.com/v1beta/models/${model}:streamGenerateContent?alt=sse`;
 
 /** Pouco "raciocínio" = resposta mais rápida. A família 2.5 usa orçamento; a 3.x usa nível. */
 function thinkingFor(model: string): Record<string, unknown> {
   return model.startsWith("gemini-2.5") ? { thinkingBudget: 0 } : { thinkingLevel: "low" };
 }
 
-/** Envia a um modelo. Se ele recusar a opção de raciocínio, repete sem ela. */
-async function postGenerate(
+class StalledError extends Error {}
+
+interface Generated {
+  text: string;
+  finishReason: string;
+}
+
+type ChunkBody = { candidates?: { finishReason?: string; content?: { parts?: { text?: string; thought?: boolean }[] } }[] };
+
+/**
+ * Pede a geração em fluxo (SSE) e junta o texto. Aborta se o primeiro pedaço não chegar a tempo
+ * ou se o prazo total acabar. Devolve a resposta HTTP quando o Google recusa o pedido.
+ */
+async function streamOnce(
   key: string,
   model: string,
-  timeoutMs: number,
+  deadline: number,
   generationConfig: Record<string, unknown>,
   rest: Record<string, unknown>,
-): Promise<Response> {
-  const send = (config: Record<string, unknown>) =>
-    fetch(ENDPOINT(model), {
+): Promise<Generated | Response> {
+  const controller = new AbortController();
+  const total = setTimeout(() => controller.abort(), Math.max(0, deadline - Date.now()));
+  const firstChunk = setTimeout(() => controller.abort(), Math.min(firstChunkTimeoutMs(), Math.max(0, deadline - Date.now())));
+  try {
+    const res = await fetch(ENDPOINT(model), {
       method: "POST",
       headers: { "Content-Type": "application/json", "x-goog-api-key": key },
-      signal: AbortSignal.timeout(timeoutMs),
+      signal: controller.signal,
       cache: "no-store",
-      body: JSON.stringify({ ...rest, generationConfig: config }),
+      body: JSON.stringify({ ...rest, generationConfig }),
     });
-  const res = await send({ ...generationConfig, thinkingConfig: thinkingFor(model) });
-  if (res.status !== 400) return res;
-  const { detail } = await errorInfo(res.clone());
-  return /thinking/i.test(detail) ? send(generationConfig) : res;
+    if (!res.ok || !res.body) {
+      clearTimeout(firstChunk);
+      return res;
+    }
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+    let text = "";
+    let finishReason = "";
+    let gotData = false;
+    for (;;) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split("\n");
+      buffer = lines.pop() ?? "";
+      for (const line of lines) {
+        if (!line.startsWith("data:")) continue;
+        const payload = line.slice(5).trim();
+        if (!payload) continue;
+        if (!gotData) {
+          gotData = true;
+          clearTimeout(firstChunk);
+        }
+        const chunk = JSON.parse(payload) as ChunkBody;
+        const c = chunk.candidates?.[0];
+        text += c?.content?.parts?.filter((p) => !p.thought).map((p) => p.text ?? "").join("") ?? "";
+        if (c?.finishReason) finishReason = c.finishReason;
+      }
+    }
+    return { text, finishReason };
+  } catch {
+    throw new StalledError();
+  } finally {
+    clearTimeout(total);
+    clearTimeout(firstChunk);
+  }
+}
+
+/** Uma tentativa num modelo. Se ele recusar a opção de raciocínio, repete sem ela. */
+async function attempt(
+  key: string,
+  model: string,
+  deadline: number,
+  generationConfig: Record<string, unknown>,
+  rest: Record<string, unknown>,
+): Promise<Generated | Response> {
+  const first = await streamOnce(key, model, deadline, { ...generationConfig, thinkingConfig: thinkingFor(model) }, rest);
+  if (!(first instanceof Response) || first.status !== 400) return first;
+  const { detail } = await errorInfo(first.clone());
+  return /thinking/i.test(detail) ? streamOnce(key, model, deadline, generationConfig, rest) : first;
 }
 
 /**
  * Tenta os modelos em ordem até um responder, dentro do orçamento de tempo.
- * Devolve a resposta bem-sucedida e o modelo que respondeu; senão, lança o último erro.
+ * Devolve o texto gerado e o modelo que respondeu; senão, lança o último erro.
  */
 async function generateWithFallback(
   key: string,
   generationConfig: Record<string, unknown>,
   rest: Record<string, unknown>,
-): Promise<{ res: Response; model: string }> {
+): Promise<Generated & { model: string }> {
   const deadline = Date.now() + TOTAL_BUDGET_MS;
   let lastError = new GeminiError("Nenhum modelo de IA respondeu", 503, "UNAVAILABLE");
   for (const model of modelCandidates()) {
-    const remaining = deadline - Date.now();
-    if (remaining < MIN_ATTEMPT_MS) break;
-    let res: Response;
+    if (deadline - Date.now() < MIN_ATTEMPT_MS) break;
+    let out: Generated | Response;
     try {
-      res = await postGenerate(key, model, remaining, generationConfig, rest);
+      out = await attempt(key, model, deadline, generationConfig, rest);
     } catch {
-      lastError = new GeminiError("Tempo esgotado ou falha de rede ao chamar a IA", 504);
+      lastError = new GeminiError("A IA não respondeu a tempo", 504, "TIMEOUT", `O modelo ${model} não começou a responder a tempo.`);
       continue;
     }
-    if (res.ok) return { res, model };
-    const { reason, detail } = await errorInfo(res);
-    lastError = new GeminiError(`Gemini respondeu ${res.status}`, res.status, reason, detail);
-    if (!TRY_NEXT_MODEL.has(res.status)) break; // chave, permissão ou pedido inválido: outro modelo não resolve
+    if (!(out instanceof Response)) return { ...out, model };
+    const { reason, detail } = await errorInfo(out);
+    lastError = new GeminiError(`Gemini respondeu ${out.status}`, out.status, reason, detail);
+    if (!TRY_NEXT_MODEL.has(out.status)) break; // chave, permissão ou pedido inválido: outro modelo não resolve
   }
   throw lastError;
 }
@@ -129,19 +195,13 @@ export async function generateJson<T = unknown>({
   const key = process.env.GOOGLE_GEMINI_API_KEY;
   if (!key) throw new GeminiError("GOOGLE_GEMINI_API_KEY não configurada", 500);
 
-  const { res, model } = await generateWithFallback(
+  const { text, finishReason, model } = await generateWithFallback(
     key,
     { temperature: 0.4, maxOutputTokens, responseMimeType: "application/json", responseSchema: schema },
     { systemInstruction: { parts: [{ text: system }] }, contents: [{ role: "user", parts: [{ text: prompt }] }] },
   );
-
-  const body = (await res.json()) as {
-    candidates?: { finishReason?: string; content?: { parts?: { text?: string }[] } }[];
-  };
-  const candidate = body.candidates?.[0];
-  const text = candidate?.content?.parts?.map((p) => p.text ?? "").join("");
   if (!text) throw new GeminiError("Resposta vazia da IA", 502);
-  if (candidate?.finishReason === "MAX_TOKENS") throw new GeminiError("Resposta da IA cortada", 502);
+  if (finishReason === "MAX_TOKENS") throw new GeminiError("Resposta da IA cortada", 502);
 
   try {
     return { data: JSON.parse(text) as T, model };
@@ -174,12 +234,13 @@ export async function checkGemini(): Promise<GeminiHealth> {
   const base = { keyConfigured: key.length > 0, keyLooksLikeAiStudio: key.startsWith("AIza"), models: modelCandidates() };
   if (!key) return { ...base, respondedModel: "", status: "missing_key", httpStatus: 0, reason: "", detail: "" };
   try {
-    const { res, model } = await generateWithFallback(key, { maxOutputTokens: 16 }, { contents: [{ role: "user", parts: [{ text: "Responda apenas: ok" }] }] });
-    return { ...base, respondedModel: model, status: "ok", httpStatus: res.status, reason: "", detail: "" };
+    const { model } = await generateWithFallback(key, { maxOutputTokens: 16 }, { contents: [{ role: "user", parts: [{ text: "Responda apenas: ok" }] }] });
+    return { ...base, respondedModel: model, status: "ok", httpStatus: 200, reason: "", detail: "" };
   } catch (e) {
     if (e instanceof GeminiError && e.status !== 504) {
       return { ...base, respondedModel: "", status: "rejected", httpStatus: e.status, reason: e.reason, detail: e.detail };
     }
-    return { ...base, respondedModel: "", status: "unreachable", httpStatus: 0, reason: "", detail: "" };
+    const detail = e instanceof GeminiError ? e.detail : "";
+    return { ...base, respondedModel: "", status: "unreachable", httpStatus: 0, reason: "TIMEOUT", detail };
   }
 }

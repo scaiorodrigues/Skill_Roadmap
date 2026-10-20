@@ -96,7 +96,10 @@ export function profileToPrompt(p: LinkedInProfile): string {
 }
 
 export function buildOptionsPrompt(p: LinkedInProfile): string {
-  return `Com base no perfil abaixo, liste os 5 caminhos de carreira mais bem remunerados e realistas para essa pessoa, partindo da experiência atual dela. Preencha também o resumo do perfil.\n\n<dados>\n${profileToPrompt(p)}\n</dados>`;
+  return `Com base no perfil abaixo, liste os 5 caminhos de carreira mais bem remunerados e realistas para essa pessoa, partindo da experiência atual dela. Preencha também o resumo do perfil.
+Regras para os 5 caminhos:
+- Devem ser 5 cargos DIFERENTES entre si. Não repita o mesmo cargo com outro nome (por exemplo, em inglês e em português) nem com outro nível de senioridade.
+- O título é só o nome do cargo, em português quando houver um nome usual no Brasil. Modalidade (remoto, internacional) não faz parte do título: vai nos campos de salário remoto, salário no exterior e nas tags.\n\n<dados>\n${profileToPrompt(p)}\n</dados>`;
 }
 
 export function buildCustomPrompt(p: LinkedInProfile, interest: string): string {
