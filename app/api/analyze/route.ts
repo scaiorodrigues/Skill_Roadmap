@@ -48,6 +48,8 @@ export async function POST(request: Request) {
       e instanceof GeminiError && e.isConfigError
         ? "O serviço de IA do app está com um problema de configuração. Esse teste não foi descontado. Avise o responsável pelo app."
         : "Não foi possível gerar sua análise agora. Esse teste não foi descontado; tente novamente em instantes.";
-    return NextResponse.json({ error }, { status: 502 });
+    // Código e mensagem do Google ajudam a corrigir a configuração; nunca contêm a chave.
+    const technical = e instanceof GeminiError ? { code: e.reason || String(e.status), detail: e.detail } : undefined;
+    return NextResponse.json({ error, technical }, { status: 502 });
   }
 }

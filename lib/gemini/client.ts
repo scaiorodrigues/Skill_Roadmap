@@ -6,6 +6,8 @@ export class GeminiError extends Error {
     readonly status: number,
     /** Código do Google, ex.: API_KEY_INVALID, PERMISSION_DENIED (nunca contém a chave). */
     readonly reason = "",
+    /** Mensagem do Google, encurtada (nunca contém a chave). */
+    readonly detail = "",
   ) {
     super(message);
   }
@@ -16,12 +18,17 @@ export class GeminiError extends Error {
   }
 }
 
-async function errorReason(res: Response): Promise<string> {
+async function errorInfo(res: Response): Promise<{ reason: string; detail: string }> {
   try {
-    const body = (await res.json()) as { error?: { status?: string; details?: { reason?: string }[] } };
-    return (body.error?.details?.find((d) => d.reason)?.reason || body.error?.status || "").slice(0, 60);
+    const body = (await res.json()) as { error?: { status?: string; message?: string; details?: { reason?: string }[] } };
+    const key = process.env.GOOGLE_GEMINI_API_KEY ?? "";
+    const detail = (body.error?.message ?? "").slice(0, 240);
+    return {
+      reason: (body.error?.details?.find((d) => d.reason)?.reason || body.error?.status || "").slice(0, 60),
+      detail: key ? detail.split(key).join("[chave]") : detail,
+    };
   } catch {
-    return "";
+    return { reason: "", detail: "" };
   }
 }
 
@@ -48,7 +55,7 @@ export async function checkGemini(): Promise<GeminiHealth> {
       cache: "no-store",
     });
     if (res.ok) return { ...base, status: "ok", httpStatus: res.status, reason: "" };
-    return { ...base, status: "rejected", httpStatus: res.status, reason: await errorReason(res) };
+    return { ...base, status: "rejected", httpStatus: res.status, reason: (await errorInfo(res)).reason };
   } catch {
     return { ...base, status: "unreachable", httpStatus: 0, reason: "" };
   }
@@ -92,7 +99,10 @@ export async function generateJson<T = unknown>({ system, prompt, schema, maxOut
     throw new GeminiError("Tempo esgotado ou falha de rede ao chamar a IA", 504);
   }
 
-  if (!res.ok) throw new GeminiError(`Gemini respondeu ${res.status}`, res.status, await errorReason(res));
+  if (!res.ok) {
+    const { reason, detail } = await errorInfo(res);
+    throw new GeminiError(`Gemini respondeu ${res.status}`, res.status, reason, detail);
+  }
 
   const body = (await res.json()) as {
     candidates?: { finishReason?: string; content?: { parts?: { text?: string }[] } }[];

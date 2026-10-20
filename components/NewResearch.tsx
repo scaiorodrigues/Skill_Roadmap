@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { withTechnical } from "@/lib/format";
 import { useRouter } from "next/navigation";
 import { LinkedInUpload } from "@/components/LinkedInUpload";
 import { requestPersistence, saveResearch } from "@/lib/storage/db";
@@ -23,7 +24,7 @@ export function NewResearch() {
         body: JSON.stringify({ profile }),
       });
       const body = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(body.error ?? "Não foi possível gerar sua análise. Tente novamente.");
+      if (!res.ok) throw new Error(withTechnical(body, "Não foi possível gerar sua análise. Tente novamente."));
 
       const { summary, result } = body as AnalyzeResponse;
       const now = new Date();

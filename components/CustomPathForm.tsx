@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { withTechnical } from "@/lib/format";
 import type { CareerOption } from "@/types/career";
 import type { LinkedInProfile } from "@/types/linkedin";
 
@@ -20,7 +21,7 @@ export function CustomPathForm({ profile, onAdded }: { profile: LinkedInProfile;
         body: JSON.stringify({ profile, interest }),
       });
       const body = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(body.error ?? "Não foi possível gerar esse caminho.");
+      if (!res.ok) throw new Error(withTechnical(body, "Não foi possível gerar esse caminho."));
       await onAdded(body.custom as CareerOption);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Falha de conexão. Tente novamente.");
