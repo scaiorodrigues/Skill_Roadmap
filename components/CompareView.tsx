@@ -14,7 +14,7 @@ function Chips({ items, tone }: { items: string[]; tone: "add" | "remove" }) {
   return (
     <span className="flex flex-wrap gap-1.5">
       {items.map((i) => (
-        <span key={i} className={`rounded-full px-2 py-0.5 text-xs ${tone === "add" ? "bg-green-100 text-green-800" : "bg-red-100 text-red-800"}`}>{i}</span>
+        <span key={i} className={`rounded-full px-2 py-0.5 text-xs ${tone === "add" ? "bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300" : "bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300"}`}>{i}</span>
       ))}
     </span>
   );

@@ -94,7 +94,7 @@ export function HistoryClient() {
               {confirming === r.id ? (
                 <span className="flex items-center gap-2 text-sm">
                   Apagar?
-                  <button onClick={() => remove("research", r.id)} className="rounded bg-red-600 px-2 py-1 text-white">Sim</button>
+                  <button onClick={() => remove("research", r.id)} className="rounded bg-red-600 px-2 py-1 text-[#fff]">Sim</button>
                   <button onClick={() => setConfirming(null)} className="rounded border px-2 py-1">Não</button>
                 </span>
               ) : (
@@ -131,8 +131,8 @@ export function HistoryClient() {
           <label htmlFor="import-file" className="cursor-pointer rounded-lg border border-slate-400 px-4 py-1.5 font-medium">Importar backup</label>
           <input id="import-file" type="file" accept="application/json,.json" className="sr-only" onChange={(e) => { void doImport(e.target.files?.[0]); e.target.value = ""; }} />
         </div>
-        {message && <p role="status" className="mt-3 text-green-700">{message}</p>}
-        {error && <p role="alert" className="mt-3 text-red-600">{error}</p>}
+        {message && <p role="status" className="mt-3 text-green-700 dark:text-green-400">{message}</p>}
+        {error && <p role="alert" className="mt-3 text-red-600 dark:text-red-400">{error}</p>}
       </section>
     </div>
   );

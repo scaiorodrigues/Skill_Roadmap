@@ -6,9 +6,9 @@ import { formatBrl } from "@/lib/format";
 
 const STRESS_ORDER = { baixo: 0, médio: 1, alto: 2 } as const;
 const STRESS_STYLE = {
-  baixo: "bg-green-100 text-green-800",
-  médio: "bg-amber-100 text-amber-800",
-  alto: "bg-red-100 text-red-800",
+  baixo: "bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300",
+  médio: "bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300",
+  alto: "bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300",
 } as const;
 
 type Sort = "salario" | "stress";

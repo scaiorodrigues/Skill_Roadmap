@@ -1,3 +1,47 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* Tema claro: valores padrão do Tailwind. */
+:root {
+  color-scheme: light;
+  --white: 255 255 255;
+  --slate-50: 248 250 252;
+  --slate-100: 241 245 249;
+  --slate-200: 226 232 240;
+  --slate-300: 203 213 225;
+  --slate-400: 148 163 184;
+  --slate-500: 100 116 139;
+  --slate-600: 71 85 105;
+  --slate-700: 51 65 85;
+  --slate-800: 30 41 59;
+  --slate-900: 15 23 42;
+  --slate-950: 2 6 23;
+}
+
+/* Tema escuro (padrão). A escala se inverte: fundos ficam escuros, textos ficam claros,
+   e os botões principais (bg-slate-900 + text-white) viram claros com texto escuro. */
+.dark {
+  color-scheme: dark;
+  --white: 20 27 45;
+  --slate-50: 11 16 32;
+  --slate-100: 28 36 56;
+  --slate-200: 42 52 75;
+  --slate-300: 62 75 100;
+  --slate-400: 100 116 139;
+  --slate-500: 134 148 171;
+  --slate-600: 168 180 199;
+  --slate-700: 203 213 225;
+  --slate-800: 226 232 240;
+  --slate-900: 241 245 249;
+  --slate-950: 248 250 252;
+}
+
+@layer base {
+  input,
+  select,
+  textarea {
+    background-color: rgb(var(--white));
+    color: rgb(var(--slate-900));
+  }
+}

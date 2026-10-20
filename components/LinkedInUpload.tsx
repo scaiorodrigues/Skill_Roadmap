@@ -69,7 +69,7 @@ export function LinkedInUpload({ onConfirm, busy, error: externalError }: Props)
         className="mt-4 block w-full text-sm file:mr-3 file:rounded-lg file:border-0 file:bg-slate-900 file:px-4 file:py-2 file:text-white"
       />
       {reading && <p className="mt-3 text-sm text-slate-600">Lendo o arquivo…</p>}
-      {(error || externalError) && <p role="alert" className="mt-3 text-sm text-red-600">{error ?? externalError}</p>}
+      {(error || externalError) && <p role="alert" className="mt-3 text-sm text-red-600 dark:text-red-400">{error ?? externalError}</p>}
       {profile && (
         <div className="mt-5 rounded-lg bg-slate-50 p-4 text-sm">
           {profile.source === "pdf" ? (
