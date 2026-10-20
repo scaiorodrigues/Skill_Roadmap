@@ -19,7 +19,7 @@ export const LIMITS = {
  * Identifica o visitante só por um hash do IP (nunca guardamos o IP em si).
  * A chave do hash é um segredo do servidor, para o hash não poder ser revertido.
  */
-export function visitorBucket(request: Request, prefix: "analysis" | "custom"): string {
+export function visitorBucket(request: Request, prefix: "analysis" | "custom" | "health"): string {
   const ip =
     request.headers.get("x-nf-client-connection-ip") ||
     request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||

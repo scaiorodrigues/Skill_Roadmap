@@ -41,28 +41,52 @@ export interface GeminiHealth {
   status: "ok" | "missing_key" | "rejected" | "unreachable";
   httpStatus: number;
   reason: string;
+  detail: string;
 }
 
-/** Pergunta ao Google se a chave e o modelo são aceitos. Não gera texto, então não gasta cota de análise. */
+/**
+ * Testa a chave e o modelo com uma geração mínima (poucos tokens). Só consultar o modelo não basta:
+ * o Google ainda lista modelos que já não aceitam geração para contas novas.
+ */
 export async function checkGemini(): Promise<GeminiHealth> {
   const key = process.env.GOOGLE_GEMINI_API_KEY ?? "";
   const base = { keyConfigured: key.length > 0, keyLooksLikeAiStudio: key.startsWith("AIza"), model: GEMINI_MODEL };
-  if (!key) return { ...base, status: "missing_key", httpStatus: 0, reason: "" };
+  if (!key) return { ...base, status: "missing_key", httpStatus: 0, reason: "", detail: "" };
   try {
-    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}`, {
-      headers: { "x-goog-api-key": key },
-      signal: AbortSignal.timeout(8000),
-      cache: "no-store",
-    });
-    if (res.ok) return { ...base, status: "ok", httpStatus: res.status, reason: "" };
-    return { ...base, status: "rejected", httpStatus: res.status, reason: (await errorInfo(res)).reason };
+    const res = await postGenerate(key, { maxOutputTokens: 16 }, { contents: [{ role: "user", parts: [{ text: "Responda apenas: ok" }] }] });
+    if (res.ok) return { ...base, status: "ok", httpStatus: res.status, reason: "", detail: "" };
+    const { reason, detail } = await errorInfo(res);
+    return { ...base, status: "rejected", httpStatus: res.status, reason, detail };
   } catch {
-    return { ...base, status: "unreachable", httpStatus: 0, reason: "" };
+    return { ...base, status: "unreachable", httpStatus: 0, reason: "", detail: "" };
   }
 }
 
-export const GEMINI_MODEL = process.env.GEMINI_MODEL || "gemini-2.5-flash";
+// gemini-2.5-flash deixou de estar disponível para contas novas; o próprio Google indica a família 3.x.
+export const GEMINI_MODEL = process.env.GEMINI_MODEL || "gemini-3.8-flash";
 const TIMEOUT_MS = 24_000;
+const ENDPOINT = (model: string) => `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
+
+/** Pouco "raciocínio" = resposta mais rápida. A família 2.5 usa orçamento; a 3.x usa nível. */
+function thinkingFor(model: string): Record<string, unknown> {
+  return model.startsWith("gemini-2.5") ? { thinkingBudget: 0 } : { thinkingLevel: "low" };
+}
+
+/** Envia ao Gemini. Se o modelo recusar a opção de raciocínio, tenta de novo sem ela. */
+async function postGenerate(key: string, generationConfig: Record<string, unknown>, rest: Record<string, unknown>): Promise<Response> {
+  const send = (config: Record<string, unknown>) =>
+    fetch(ENDPOINT(GEMINI_MODEL), {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "x-goog-api-key": key },
+      signal: AbortSignal.timeout(TIMEOUT_MS),
+      cache: "no-store",
+      body: JSON.stringify({ ...rest, generationConfig: config }),
+    });
+  const res = await send({ ...generationConfig, thinkingConfig: thinkingFor(GEMINI_MODEL) });
+  if (res.status !== 400) return res;
+  const { detail } = await errorInfo(res.clone());
+  return /thinking/i.test(detail) ? send(generationConfig) : res;
+}
 
 interface GenerateJsonInput {
   system: string;
@@ -79,22 +103,11 @@ export async function generateJson<T = unknown>({ system, prompt, schema, maxOut
 
   let res: Response;
   try {
-    res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "x-goog-api-key": key },
-      signal: AbortSignal.timeout(TIMEOUT_MS),
-      body: JSON.stringify({
-        systemInstruction: { parts: [{ text: system }] },
-        contents: [{ role: "user", parts: [{ text: prompt }] }],
-        generationConfig: {
-          temperature: 0.4,
-          maxOutputTokens,
-          responseMimeType: "application/json",
-          responseSchema: schema,
-          thinkingConfig: { thinkingBudget: 0 },
-        },
-      }),
-    });
+    res = await postGenerate(
+      key,
+      { temperature: 0.4, maxOutputTokens, responseMimeType: "application/json", responseSchema: schema },
+      { systemInstruction: { parts: [{ text: system }] }, contents: [{ role: "user", parts: [{ text: prompt }] }] },
+    );
   } catch {
     throw new GeminiError("Tempo esgotado ou falha de rede ao chamar a IA", 504);
   }
