@@ -34,7 +34,11 @@ export async function POST(request: Request) {
     return NextResponse.json({ custom });
   } catch (e) {
     await releaseUsage(bucket);
-    console.error("custom path failed", { status: e instanceof GeminiError ? e.status : 0 });
-    return NextResponse.json({ error: "Não foi possível gerar esse caminho agora. Tente novamente." }, { status: 502 });
+    console.error("custom path failed", { status: e instanceof GeminiError ? e.status : 0, reason: e instanceof GeminiError ? e.reason : "" });
+    const error =
+      e instanceof GeminiError && e.isConfigError
+        ? "O serviço de IA do app está com um problema de configuração. Avise o responsável pelo app."
+        : "Não foi possível gerar esse caminho agora. Tente novamente.";
+    return NextResponse.json({ error }, { status: 502 });
   }
 }

@@ -43,10 +43,11 @@ export async function POST(request: Request) {
     return NextResponse.json({ summary, result } satisfies AnalyzeResponse);
   } catch (e) {
     await releaseUsage(bucket); // falhou: o teste do dia não é consumido
-    console.error("analyze failed", { status: e instanceof GeminiError ? e.status : 0 });
-    return NextResponse.json(
-      { error: "Não foi possível gerar sua análise agora. Esse teste não foi descontado; tente novamente em instantes." },
-      { status: 502 },
-    );
+    console.error("analyze failed", { status: e instanceof GeminiError ? e.status : 0, reason: e instanceof GeminiError ? e.reason : "" });
+    const error =
+      e instanceof GeminiError && e.isConfigError
+        ? "O serviço de IA do app está com um problema de configuração. Esse teste não foi descontado. Avise o responsável pelo app."
+        : "Não foi possível gerar sua análise agora. Esse teste não foi descontado; tente novamente em instantes.";
+    return NextResponse.json({ error }, { status: 502 });
   }
 }

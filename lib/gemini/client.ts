@@ -4,8 +4,53 @@ export class GeminiError extends Error {
   constructor(
     message: string,
     readonly status: number,
+    /** Código do Google, ex.: API_KEY_INVALID, PERMISSION_DENIED (nunca contém a chave). */
+    readonly reason = "",
   ) {
     super(message);
+  }
+
+  /** Erro de configuração (chave, permissão, modelo), e não uma falha passageira. */
+  get isConfigError(): boolean {
+    return [400, 401, 403, 404].includes(this.status);
+  }
+}
+
+async function errorReason(res: Response): Promise<string> {
+  try {
+    const body = (await res.json()) as { error?: { status?: string; details?: { reason?: string }[] } };
+    return (body.error?.details?.find((d) => d.reason)?.reason || body.error?.status || "").slice(0, 60);
+  } catch {
+    return "";
+  }
+}
+
+export interface GeminiHealth {
+  keyConfigured: boolean;
+  /** Chaves do Google AI Studio começam com "AIza". */
+  keyLooksLikeAiStudio: boolean;
+  model: string;
+  /** "ok" quando o Google aceita a chave e o modelo. */
+  status: "ok" | "missing_key" | "rejected" | "unreachable";
+  httpStatus: number;
+  reason: string;
+}
+
+/** Pergunta ao Google se a chave e o modelo são aceitos. Não gera texto, então não gasta cota de análise. */
+export async function checkGemini(): Promise<GeminiHealth> {
+  const key = process.env.GOOGLE_GEMINI_API_KEY ?? "";
+  const base = { keyConfigured: key.length > 0, keyLooksLikeAiStudio: key.startsWith("AIza"), model: GEMINI_MODEL };
+  if (!key) return { ...base, status: "missing_key", httpStatus: 0, reason: "" };
+  try {
+    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}`, {
+      headers: { "x-goog-api-key": key },
+      signal: AbortSignal.timeout(8000),
+      cache: "no-store",
+    });
+    if (res.ok) return { ...base, status: "ok", httpStatus: res.status, reason: "" };
+    return { ...base, status: "rejected", httpStatus: res.status, reason: await errorReason(res) };
+  } catch {
+    return { ...base, status: "unreachable", httpStatus: 0, reason: "" };
   }
 }
 
@@ -47,7 +92,7 @@ export async function generateJson<T = unknown>({ system, prompt, schema, maxOut
     throw new GeminiError("Tempo esgotado ou falha de rede ao chamar a IA", 504);
   }
 
-  if (!res.ok) throw new GeminiError(`Gemini respondeu ${res.status}`, res.status);
+  if (!res.ok) throw new GeminiError(`Gemini respondeu ${res.status}`, res.status, await errorReason(res));
 
   const body = (await res.json()) as {
     candidates?: { finishReason?: string; content?: { parts?: { text?: string }[] } }[];
