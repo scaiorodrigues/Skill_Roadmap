@@ -16,6 +16,11 @@ export class GeminiError extends Error {
   get isConfigError(): boolean {
     return [400, 401, 403, 404].includes(this.status);
   }
+
+  /** Algum modelo recusou por cota esgotada (limite da chave), e não por sobrecarga. */
+  get quotaExhausted(): boolean {
+    return this.status === 429 || this.detail.includes("RESOURCE_EXHAUSTED");
+  }
 }
 
 async function errorInfo(res: Response): Promise<{ reason: string; detail: string }> {

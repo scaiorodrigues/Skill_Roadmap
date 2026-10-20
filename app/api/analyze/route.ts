@@ -47,6 +47,8 @@ export async function POST(request: Request) {
     const error =
       e instanceof GeminiError && e.isConfigError
         ? "O serviço de IA do app está com um problema de configuração. Esse teste não foi descontado. Avise o responsável pelo app."
+        : e instanceof GeminiError && e.quotaExhausted
+        ? "O limite de uso da IA do app foi atingido por agora. Esse teste não foi descontado; tente de novo mais tarde."
         : "Não foi possível gerar sua análise agora. Esse teste não foi descontado; tente novamente em instantes.";
     // Código e mensagem do Google ajudam a corrigir a configuração; nunca contêm a chave.
     const technical = e instanceof GeminiError ? { code: e.reason || String(e.status), detail: e.detail } : undefined;
